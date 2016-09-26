@@ -27,7 +27,8 @@ int main () {
     const float overlap_thresh = 0.3;
     const float boxsize_thresh = 0.1;
 
-    int batch = BATCH;
+    const int batch = BATCH;
+    const int batch_size = TEST_BOXES_NUM_PER_BATCH;
     const int output_boxes_num = 300;
 
     float output_boxes[BATCH * output_boxes_num * BOX_SIZE];
@@ -35,10 +36,10 @@ int main () {
     std::memset(output_boxes, -1, BATCH * output_boxes_num * BOX_SIZE * sizeof(float));
     
     float* boxes_dev = NULL;
-    size_t input_array_size = batch * 6000 * BOX_SIZE * sizeof(float);
+    size_t input_array_size = batch * batch_size * BOX_SIZE * sizeof(float);
 
     float* boxes_output_dev = NULL;
-    size_t output_array_size = batch * 300 * BOX_SIZE * sizeof(float);
+    size_t output_array_size = batch * output_boxes_num * BOX_SIZE * sizeof(float);
 
     CUDA_CHECK(cudaMalloc(&boxes_dev, input_array_size));
     CUDA_CHECK(cudaMalloc(&boxes_output_dev, output_array_size));
@@ -65,7 +66,7 @@ int main () {
 
     nms(boxes_dev,
                 batch, 
-                TEST_BOXES_NUM_PER_BATCH,
+                batch_size,
                 output_boxes_num,
                 overlap_thresh,
                 boxsize_thresh,

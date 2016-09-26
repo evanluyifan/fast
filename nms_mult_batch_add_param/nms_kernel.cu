@@ -16,28 +16,12 @@
 #define DIVUP(m,n) ((m) / (n) + ((m) % (n) > 0))
 
 #define BOX_SIZE 4
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 512
 
 __forceinline__ __device__ void loadstore(float * dst, float const * const src) {
     #pragma unroll
     for (int k = 0; k < BOX_SIZE; k++) {
        dst[k] = src[k];
-    }
-}
-
-__forceinline__ __device__ void setBoxesEmpty(float * boxes, const int start, const int end) {
-    // start and end are the index of a box, and box have size
-    int box_idx = threadIdx.x + start;
-    int count = DIVUP((end - start), BLOCK_SIZE);
-    #pragma unroll
-    for (int i = 0; i < count; i++) {
-        if (box_idx < end) {
-            #pragma unroll
-            for (int k = 0; k < BOX_SIZE; k++) {
-                boxes[box_idx * BOX_SIZE + k] = 0.0f;
-            }
-        }
-        box_idx += BLOCK_SIZE;
     }
 }
 
@@ -57,6 +41,21 @@ __forceinline__ __device__ bool checkBoxSize(float const * const box, const floa
     return (min(w, h) > boxsize_thresh ? true : false);
 }
 
+__forceinline__ __device__ void setBoxesEmpty(float * boxes, const int start, const int end) {
+    // start and end are the index of a box, and box have size
+    int box_idx = threadIdx.x + start;
+    int count = DIVUP((end - start), BLOCK_SIZE);
+    #pragma unroll
+    for (int i = 0; i < count; i++) {
+        if (box_idx < end) {
+            #pragma unroll
+            for (int k = 0; k < BOX_SIZE; k++) {
+                boxes[box_idx * BOX_SIZE + k] = 0.0f;
+            }
+        }
+        box_idx += BLOCK_SIZE;
+    }
+}
 
 __global__ 
 __launch_bounds__(BLOCK_SIZE)
@@ -99,11 +98,13 @@ void nms_kernel(float *input_boxes,
 
     int kept = 0; // record the number of boxes kept
 
+    while (!kept_boxes[ref_box_idx - batch_offset_in] && ref_box_idx < max_box_idx) {
+        ref_box_idx++;
+    }
+    // the first box may be removed for size too small
+
     /*** remove the overlaped boxes ***/
     while ((kept < output_boxes_per_batch) && (ref_box_idx < max_box_idx)) {
-    //#pragma unroll
-    //for (int k = 0; k < output_boxes_per_batch; k++) {
-        //if (ref_box_idx < max_box_idx) {
         float ref_box[BOX_SIZE];
         loadstore(ref_box, input_boxes + ref_box_idx * BOX_SIZE);
 
@@ -132,7 +133,6 @@ void nms_kernel(float *input_boxes,
         } while (!kept_boxes[ref_box_idx - batch_offset_in] && (ref_box_idx < max_box_idx));
 
         kept++;
-        //}
     }
 
     /*** if kept boxes < request output boxes, set left output buffer 0 ***/
